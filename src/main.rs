@@ -1,40 +1,30 @@
 #![no_std]
 #![no_main]
 
-use panic_halt as _;
+use panic_halt as _; // panic handler
 
-use cortex_m::peripheral::syst;
-use cortex_m_rt::entry;
-use stm32wl::stm32wl5x_cm4;
+use stm32wlxx_hal::{
+    cortex_m,
+    gpio::{Output, PortB},
+    pac,
+    util::new_delay,
+};
+
+use stm32wlxx_hal::cortex_m_rt::entry;
 
 #[entry]
 fn main() -> ! {
-    let p = stm32wl5x_cm4::Peripherals::take().unwrap();
+    let mut p = pac::Peripherals::take().unwrap();
+    let gpiob = PortB::split(p.GPIOB, &mut p.RCC);
+    let mut led = cortex_m::interrupt::free(|cs| Output::default(gpiob.b15, cs));
 
-    let rcc = &p.RCC;
-    // Enable clock for GPIOB peripheral
-    rcc.ahb2enr.write(|w| w.gpioben().set_bit());
+    let cp = pac::CorePeripherals::take().unwrap();
+    let mut delay = new_delay(cp.SYST, &p.RCC);
 
-    let gpiob = &p.GPIOB;
-    // Put GPIOB PIN 15 in OUTPUT MODE
-    gpiob.moder.write(|w| w.moder15().bits(0b01));
-
-    let cp = cortex_m::peripheral::Peripherals::take().unwrap();
-    let mut systick = cp.SYST;
-    systick.set_clock_source(syst::SystClkSource::Core);
-    systick.set_reload(4_000_000);
-    systick.clear_current();
-    systick.enable_counter();
-
-    let mut led_on = false;
     loop {
-        while !systick.has_wrapped() {}
-
-        if led_on {
-            gpiob.bsrr.write(|w| w.br15().set_bit());
-        } else {
-            gpiob.bsrr.write(|w| w.bs15().set_bit());
-        }
-        led_on = !led_on;
+        led.set_level_high();
+        delay.delay_ms(1000);
+        led.set_level_low();
+        delay.delay_ms(1000);
     }
 }

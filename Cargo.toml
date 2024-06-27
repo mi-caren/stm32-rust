@@ -6,14 +6,21 @@ name = "stm32-rust"
 version = "0.1.0"
 
 [dependencies]
-cortex-m = "0.6.0"
-cortex-m-rt = "0.6.10"
-cortex-m-semihosting = "0.3.3"
 panic-halt = "0.2.0"
+# cortex-m = "0.6.0"
+# cortex-m-rt = "0.6.10"
+# cortex-m-semihosting = "0.3.3"
 
-[dependencies.stm32wl]
-version = "0.15.1"
-features = ["stm32wl5x_cm4"]
+# [dependencies.stm32wl]
+# version = "0.15.1"
+# features = ["stm32wl5x_cm4"]
+
+[dependencies.stm32wlxx-hal]
+version = "0.6.1"
+features = [
+    "stm32wl5x_cm4",
+    "rt"
+]
 
 # Uncomment for the panic example.
 # panic-itm = "0.4.1"
