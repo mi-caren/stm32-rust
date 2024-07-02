@@ -9,7 +9,7 @@ use stm32wlxx_hal::{
     gpio::{Output, PortA, PortB},
     pac,
     util::new_delay,
-    uart::{self, LpUart},
+    uart::{self, Uart1},
     subghz,
     dma,
 };
@@ -23,16 +23,18 @@ fn main() -> ! {
 
     // LED
     let gpiob = PortB::split(p.GPIOB, &mut p.RCC);
-    let mut led = cortex_m::interrupt::free(|cs| Output::default(gpiob.b15, cs));
+    let pb5 = gpiob.b5;
+    let mut led = cortex_m::interrupt::free(|cs| Output::default(pb5, cs));
 
     // DELAY
     let mut delay = new_delay(cp.SYST, &p.RCC);
 
     // UART
-    let gpioa = PortA::split(p.GPIOA, &mut p.RCC);
-    let no_tx_uart = LpUart::new(p.LPUART, 115_200, uart::Clk::Sysclk, &mut p.RCC);
+    // let gpioa = PortA::split(p.GPIOA, &mut p.RCC);
+    let no_tx_uart = Uart1::new(p.USART1, 115_200, uart::Clk::Sysclk, &mut p.RCC);
+    let pb6 = gpiob.b6;
     let mut uart = cortex_m::interrupt::free(|cs| {
-            no_tx_uart.enable_tx(gpioa.a2, cs)
+            no_tx_uart.enable_tx(pb6, cs)
             // .enable_rx(gpioa.a3, cs)
     });
 
@@ -111,7 +113,7 @@ fn main() -> ! {
         led.set_level_low();
         delay.delay_ms(1000);
 
-        write!(uart, "Hello, World!\r\n").unwrap();
+        write!(uart, "Hello, World! From Seeed Studio E5 Dev Board\r\n").unwrap();
 
         sg.set_tx(subghz::Timeout::DISABLED).unwrap();
 
