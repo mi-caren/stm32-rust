@@ -45,7 +45,7 @@ fn main() -> ! {
     // AppKey: F41128AA66EEC52B25EDCF0E9503C7C7
     const MSG: &str = "Hello, World!";
     const MSG_LEN :u8 = MSG.len() as u8;
-    const MSG_BYTES: &[u8] = MSG.as_bytes();
+    // const MSG_BYTES: &[u8] = MSG.as_bytes();
 
     let dma = dma::AllDma::split(p.DMAMUX, p.DMA1, p.DMA2, &mut p.RCC);
     let mut sg = subghz::SubGhz::new_with_dma(p.SPI3, dma.d1.c1, dma.d1.c2, &mut p.RCC);
@@ -100,11 +100,12 @@ fn main() -> ! {
 
     sg.set_rf_frequency(&subghz::RfFreq::from_frequency(434_000_000)).unwrap();
 
-    sg.write_buffer(TX_BASE_ADDR, MSG_BYTES).unwrap();
+    // sg.write_buffer(TX_BASE_ADDR, MSG_BYTES).unwrap();
 
     sg.set_irq_cfg(
         &subghz::CfgIrq::new()
             .irq_enable_all(subghz::Irq::TxDone)
+            .irq_enable_all(subghz::Irq::RxDone)
             .irq_enable_all(subghz::Irq::Timeout)
             .irq_enable_all(subghz::Irq::Err)
     ).unwrap();
@@ -120,26 +121,31 @@ fn main() -> ! {
 
         write!(uart, "Hello, World! From Seeed Studio E5 Dev Board\r\n").unwrap();
 
-        rfs.set_tx_hp();
-        sg.set_tx(subghz::Timeout::DISABLED).unwrap();
+        rfs.set_rx();
+        sg.set_rx(subghz::Timeout::DISABLED).unwrap();
 
         let mut times = 0;
         loop {
             let (status, irq_status) = sg.irq_status().unwrap();
             sg.clear_irq_status(irq_status).unwrap();
 
-            if status.cmd() == Ok(subghz::CmdStatus::Complete) {
-                write!(uart, "TX DONE\r\n").unwrap();
-            }
-
-            if irq_status & subghz::Irq::TxDone.mask() != 0 {
-                write!(uart, "LoRa message sent\r\n").unwrap();
+            if irq_status & subghz::Irq::RxDone.mask() != 0 {
+                write!(uart, "LoRa message received\r\n").unwrap();
+                let (_status, len, ptr) = sg.rx_buffer_status().unwrap();
+                let mut buf: [u8; 64] = [0; 64];
+                let data: &mut [u8] = &mut buf[..usize::from(len)];
+                sg.read_buffer(ptr, data).unwrap();
+                write!(uart, "Received message: ").unwrap();
+                for byte in data {
+                    write!(uart, "{}", *byte as char).unwrap();
+                }
+                write!(uart, "\r\n").unwrap();
                 break;
             } else if irq_status & subghz::Irq::Timeout.mask() != 0 {
-                write!(uart, "LoRa transmission timed out\r\n").unwrap();
+                write!(uart, "LoRa reception timed out\r\n").unwrap();
                 break;
             } else if irq_status & subghz::Irq::Err.mask() != 0 {
-                write!(uart, "LoRa transmission error\r\n").unwrap();
+                write!(uart, "LoRa reception error\r\n").unwrap();
                 break;
             }
 
