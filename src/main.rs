@@ -4,17 +4,20 @@
 use panic_halt as _; // panic handler
 use core::fmt::Write;
 
-use stm32wlxx_hal::{
-    cortex_m,
-    gpio::{Output, PortA, PortB},
-    pac,
-    util::new_delay,
-    uart::{self, LpUart},
-    subghz,
-    dma,
+use nucleo_wl55jc_bsp::{
+    hal::{
+        cortex_m,
+        cortex_m_rt::entry,
+        gpio::{Output, PortA, PortB, PortC},
+        pac,
+        util::new_delay,
+        uart::{self, LpUart},
+        subghz,
+        dma,
+    },
+    RfSwitch
 };
 
-use stm32wlxx_hal::cortex_m_rt::entry;
 
 #[entry]
 fn main() -> ! {
@@ -40,7 +43,7 @@ fn main() -> ! {
     // AppKey: F41128AA66EEC52B25EDCF0E9503C7C7
     const MSG: &str = "Hello, World!";
     const MSG_LEN :u8 = MSG.len() as u8;
-    const MSG_BYTES: &[u8] = MSG.as_bytes();
+    // const MSG_BYTES: &[u8] = MSG.as_bytes();
 
     let dma = dma::AllDma::split(p.DMAMUX, p.DMA1, p.DMA2, &mut p.RCC);
     let mut sg = subghz::SubGhz::new_with_dma(p.SPI3, dma.d1.c1, dma.d1.c2, &mut p.RCC);
@@ -95,15 +98,16 @@ fn main() -> ! {
 
     sg.set_rf_frequency(&subghz::RfFreq::from_frequency(434_000_000)).unwrap();
 
-    sg.write_buffer(TX_BASE_ADDR, MSG_BYTES).unwrap();
-
     sg.set_irq_cfg(
         &subghz::CfgIrq::new()
-            .irq_enable_all(subghz::Irq::TxDone)
+            .irq_enable_all(subghz::Irq::RxDone)
+            // .irq_enable_all(subghz::Irq::TxDone)
             .irq_enable_all(subghz::Irq::Timeout)
             .irq_enable_all(subghz::Irq::Err)
     ).unwrap();
 
+    let gpioc = PortC::split(p.GPIOC, &mut p.RCC);
+    let mut rfs = cortex_m::interrupt::free(|cs| RfSwitch::new(gpioc.c3, gpioc.c4, gpioc.c5, cs));
 
     loop {
         led.set_level_high();
@@ -111,9 +115,10 @@ fn main() -> ! {
         led.set_level_low();
         delay.delay_ms(1000);
 
-        write!(uart, "Hello, World!\r\n").unwrap();
+        write!(uart, "Hello, World! From ST Nucleo Board\r\n").unwrap();
 
-        sg.set_tx(subghz::Timeout::DISABLED).unwrap();
+        rfs.set_rx();
+        sg.set_rx(subghz::Timeout::DISABLED).unwrap();
 
         let mut times = 0;
         loop {
@@ -121,14 +126,19 @@ fn main() -> ! {
             sg.clear_irq_status(irq_status).unwrap();
 
             if status.cmd() == Ok(subghz::CmdStatus::Complete) {
-                write!(uart, "TX DONE\r\n").unwrap();
+                write!(uart, "RX DONE\r\n").unwrap();
             }
 
-            if irq_status & subghz::Irq::TxDone.mask() != 0 {
-                write!(uart, "LoRa message sent\r\n").unwrap();
+            if irq_status & subghz::Irq::RxDone.mask() != 0 {
+                write!(uart, "LoRa message received\r\n").unwrap();
+                let (_status, len, ptr) = sg.rx_buffer_status().unwrap();
+                let mut buf: [u8; 64] = [0; 64];
+                let data: &mut [u8] = &mut buf[..usize::from(len)];
+                sg.read_buffer(ptr, data).unwrap();
+                write!(uart, "Received message: {:?}\r\n", data).unwrap();
                 break;
             } else if irq_status & subghz::Irq::Timeout.mask() != 0 {
-                write!(uart, "LoRa transmission timed out\r\n").unwrap();
+                write!(uart, "RX Timeout\r\n").unwrap();
                 break;
             } else if irq_status & subghz::Irq::Err.mask() != 0 {
                 write!(uart, "LoRa transmission error\r\n").unwrap();
@@ -136,8 +146,8 @@ fn main() -> ! {
             }
 
             times += 1;
-            if times == 100 {
-                write!(uart, "Tried 100 times\r\n").unwrap();
+            if times == 300 {
+                write!(uart, "Tried 300 times\r\n").unwrap();
                 break;
             }
             delay.delay_ms(20);
