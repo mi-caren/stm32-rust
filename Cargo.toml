@@ -15,10 +15,9 @@ panic-halt = "0.2.0"
 # version = "0.15.1"
 # features = ["stm32wl5x_cm4"]
 
-[dependencies.stm32wlxx-hal]
+[dependencies.lora-e5-bsp]
 version = "0.6.1"
 features = [
-    "stm32wle5",
     "rt"
 ]
 

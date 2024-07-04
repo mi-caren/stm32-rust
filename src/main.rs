@@ -4,17 +4,20 @@
 use panic_halt as _; // panic handler
 use core::fmt::Write;
 
-use stm32wlxx_hal::{
-    cortex_m,
-    gpio::{Output, PortA, PortB},
-    pac,
-    util::new_delay,
-    uart::{self, Uart1},
-    subghz,
-    dma,
+use lora_e5_bsp::{
+    hal::{
+        cortex_m,
+        cortex_m_rt::entry,
+        gpio::{Output, PortA, PortB},
+        pac,
+        util::new_delay,
+        uart::{self, Uart1},
+        subghz,
+        dma,
+    },
+    RfSwitch
 };
 
-use stm32wlxx_hal::cortex_m_rt::entry;
 
 #[entry]
 fn main() -> ! {
@@ -106,6 +109,8 @@ fn main() -> ! {
             .irq_enable_all(subghz::Irq::Err)
     ).unwrap();
 
+    let gpioa: PortA = PortA::split(p.GPIOA, &mut p.RCC);
+    let mut rfs: RfSwitch = cortex_m::interrupt::free(|cs| RfSwitch::new(gpioa.a4, gpioa.a5, cs));
 
     loop {
         led.set_level_high();
@@ -115,6 +120,7 @@ fn main() -> ! {
 
         write!(uart, "Hello, World! From Seeed Studio E5 Dev Board\r\n").unwrap();
 
+        rfs.set_tx_hp();
         sg.set_tx(subghz::Timeout::DISABLED).unwrap();
 
         let mut times = 0;
